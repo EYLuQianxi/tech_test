@@ -1,0 +1,10 @@
+# Ignore data files
+Part_1/data/raw/
+Part_1/data/processed/
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
