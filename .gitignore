@@ -1,5 +1,4 @@
 # Ignore data files
-Part_1/data/raw/
 Part_1/data/processed/
 
 # Python
