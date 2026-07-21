@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HDB Data Platform — Data Ingestion &amp; Exploitation Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+    .container { max-width: 1440px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .pulse-dot {
+      width: 12px; height: 12px;
+      background: #22d3ee;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.875rem;
+      margin-left: 1.75rem;
+    }
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+    svg {
+      width: 100%;
+      min-width: 1150px;
+      display: block;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: #475569;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>HDB Data Platform Architecture</h1>
+      </div>
+      <p class="subtitle">Data Ingestion from data.gov.sg &amp; Data Exploitation via Tableau on AWS</p>
+    </div>
+
+    <!-- Main Diagram -->
+    <div class="diagram-container">
+      <svg viewBox="0 0 1400 800">
+        <defs>
+          <marker id="ah-slate" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b" /></marker>
+          <marker id="ah-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" /></marker>
+          <marker id="ah-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" /></marker>
+          <marker id="ah-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" /></marker>
+          <marker id="ah-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#34d399" /></marker>
+          <marker id="ah-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" /></marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="1400" height="800" fill="url(#grid)" />
+
+        <!-- ========================================= -->
+        <!-- BOUNDARIES (drawn first, behind all)        -->
+        <!-- ========================================= -->
+
+        <!-- VPC Boundary -->
+        <rect x="180" y="100" width="930" height="620" rx="12" fill="rgba(251, 191, 36, 0.03)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="10,6" />
+        <text x="195" y="122" fill="#fbbf24" font-size="12" font-weight="600">AWS VPC — HDB Data Platform (Multi-AZ)</text>
+
+        <!-- Regional Services Boundary -->
+        <rect x="1130" y="100" width="250" height="620" rx="12" fill="rgba(56, 189, 248, 0.03)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="10,6" />
+        <text x="1142" y="120" fill="#38bdf8" font-size="11" font-weight="600">AWS Regional Services</text>
+        <text x="1142" y="134" fill="#64748b" font-size="8">reached via VPC Endpoints — not in VPC</text>
+
+        <!-- Public Subnet band -->
+        <rect x="196" y="150" width="898" height="82" rx="8" fill="rgba(251,191,36,0.04)" stroke="#fbbf24" stroke-width="0.7" stroke-dasharray="3,3" />
+        <text x="206" y="146" fill="#94a3b8" font-size="9">Public Subnet (per-AZ)</text>
+
+        <!-- Section labels -->
+        <text x="206" y="258" fill="#94a3b8" font-size="9">Private Subnet — Ingestion</text>
+        <text x="516" y="258" fill="#94a3b8" font-size="9">Private Subnet — VPC Endpoints (ENIs)</text>
+        <text x="830" y="258" fill="#94a3b8" font-size="9">Private Subnet — Analytics</text>
+
+        <!-- Security Group: Ingestion -->
+        <rect x="197" y="268" width="252" height="202" rx="8" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4" />
+        <text x="207" y="283" fill="#fb7185" font-size="8">sg-ingestion (egress :443)</text>
+
+        <!-- Security Group: Analytics -->
+        <rect x="822" y="268" width="242" height="170" rx="8" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4" />
+        <text x="832" y="283" fill="#fb7185" font-size="8">sg-analytics (ingress from ALB :443)</text>
+
+        <!-- ========================================= -->
+        <!-- ARROWS (behind components)                  -->
+        <!-- ========================================= -->
+
+        <!-- Users -> ALB -->
+        <path d="M 165 178 L 165 138 L 950 138 L 950 160" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)" />
+        <text x="540" y="132" fill="#22d3ee" font-size="8">HTTPS (analyst access)</text>
+
+        <!-- ALB -> Tableau -->
+        <line x1="950" y1="217" x2="950" y2="298" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)" />
+
+        <!-- Fargate -> NAT A (egress) -->
+        <line x1="275" y1="300" x2="275" y2="215" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)" />
+
+        <!-- NAT -> data.gov.sg (HTTPS pull, private/auth style) -->
+        <path d="M 215 189 L 185 189 L 185 458 L 167 458" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ah-rose)" />
+        <text x="112" y="250" fill="#fb7185" font-size="8">HTTPS pull</text>
+
+        <!-- Fargate -> S3 endpoint (write raw) -->
+        <path d="M 427 335 L 480 335 L 480 310 L 513 310" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#ah-purple)" />
+        <text x="432" y="330" fill="#94a3b8" font-size="8">write raw</text>
+
+        <!-- Lambda -> Glue endpoint (trigger crawler) -->
+        <path d="M 427 418 L 475 418 L 475 402 L 513 402" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ah-green)" />
+        <text x="432" y="440" fill="#94a3b8" font-size="8">start crawler</text>
+
+        <!-- S3 endpoint -> S3 Data Lake (multipart upload, crosses VPC) -->
+        <path d="M 710 320 L 710 469 L 1148 469" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#ah-purple)" />
+        <text x="740" y="463" fill="#94a3b8" font-size="8">multipart upload · SSE-KMS</text>
+
+        <!-- Tableau -> Athena endpoint (JDBC) -->
+        <line x1="845" y1="356" x2="713" y2="356" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)" />
+        <text x="722" y="350" fill="#22d3ee" font-size="8">Athena JDBC Driver</text>
+
+        <!-- Athena endpoint -> Amazon Athena (PrivateLink, clear lane at y=246) -->
+        <path d="M 710 342 L 710 246 L 1140 246 L 1140 320 L 1148 320" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ah-rose)" />
+        <text x="900" y="241" fill="#fb7185" font-size="8">PrivateLink (Athena API)</text>
+
+        <!-- Glue endpoint -> AWS Glue (metadata, mid route) -->
+        <path d="M 710 398 L 1148 398" fill="none" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ah-rose)" />
+        <text x="1070" y="393" fill="#fb7185" font-size="8">metadata</text>
+
+        <!-- EventBridge -> Step Functions -->
+        <line x1="1255" y1="203" x2="1255" y2="212" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah-green)" />
+
+        <!-- Step Functions -> Fargate (RunTask control, crosses into VPC) -->
+        <path d="M 1148 235 L 462 235 L 462 322 L 429 322" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#ah-green)" />
+        <text x="590" y="230" fill="#34d399" font-size="8">RunTask (.sync)</text>
+
+        <!-- Amazon Athena -> AWS Glue (schema) -->
+        <line x1="1235" y1="352" x2="1235" y2="362" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ah-purple)" />
+        <text x="1180" y="360" fill="#94a3b8" font-size="7">schema</text>
+
+        <!-- AWS Glue -> S3 (crawl) -->
+        <line x1="1285" y1="416" x2="1285" y2="426" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ah-purple)" />
+        <text x="1292" y="424" fill="#94a3b8" font-size="7">crawl</text>
+
+        <!-- Amazon Athena -> S3 Data Lake (scan, right margin) -->
+        <path d="M 1360 340 L 1372 340 L 1372 455 L 1360 455" fill="none" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ah-purple)" />
+        <text x="1330" y="435" fill="#94a3b8" font-size="7">scan</text>
+
+        <!-- Amazon Athena -> S3 Results (left margin) -->
+        <path d="M 1150 340 L 1140 340 L 1140 528 L 1150 528" fill="none" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ah-purple)" />
+        <text x="1096" y="470" fill="#94a3b8" font-size="7">results</text>
+
+        <!-- KMS -> S3 (SSE-KMS) -->
+        <path d="M 1150 605 L 1133 605 L 1133 480 L 1150 480" fill="none" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#ah-rose)" />
+        <text x="1096" y="560" fill="#fb7185" font-size="7">SSE-KMS</text>
+
+        <!-- ========================================= -->
+        <!-- COMPONENTS                                  -->
+        <!-- ========================================= -->
+
+        <!-- Data Science Users (External) -->
+        <rect x="25" y="150" width="140" height="56" rx="6" fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1.5" />
+        <text x="95" y="174" fill="white" font-size="10" font-weight="600" text-anchor="middle">Data Science Team</text>
+        <text x="95" y="190" fill="#94a3b8" font-size="8" text-anchor="middle">(Tableau users)</text>
+
+        <!-- data.gov.sg (External) -->
+        <rect x="25" y="430" width="140" height="56" rx="6" fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1.5" />
+        <text x="95" y="454" fill="white" font-size="11" font-weight="600" text-anchor="middle">data.gov.sg</text>
+        <text x="95" y="470" fill="#94a3b8" font-size="8" text-anchor="middle">Public API</text>
+
+        <!-- NAT Gateway A -->
+        <rect x="215" y="167" width="120" height="48" rx="6" fill="rgba(120, 53, 15, 0.35)" stroke="#fbbf24" stroke-width="1.5" />
+        <text x="275" y="187" fill="white" font-size="9" font-weight="600" text-anchor="middle">NAT Gateway</text>
+        <text x="275" y="201" fill="#94a3b8" font-size="8" text-anchor="middle">AZ-a</text>
+
+        <!-- NAT Gateway B -->
+        <rect x="345" y="167" width="120" height="48" rx="6" fill="rgba(120, 53, 15, 0.35)" stroke="#fbbf24" stroke-width="1.5" />
+        <text x="405" y="187" fill="white" font-size="9" font-weight="600" text-anchor="middle">NAT Gateway</text>
+        <text x="405" y="201" fill="#94a3b8" font-size="8" text-anchor="middle">AZ-b</text>
+
+        <!-- ALB + WAF -->
+        <rect x="850" y="160" width="200" height="57" rx="6" fill="rgba(120, 53, 15, 0.35)" stroke="#fbbf24" stroke-width="1.5" />
+        <text x="950" y="182" fill="white" font-size="10" font-weight="600" text-anchor="middle">Application Load Balancer</text>
+        <text x="950" y="198" fill="#94a3b8" font-size="8" text-anchor="middle">+ AWS WAF (WebACL)</text>
+        <text x="950" y="210" fill="#fbbf24" font-size="7" text-anchor="middle">public-facing · analyst ingress</text>
+
+        <!-- ECS Fargate -->
+        <rect x="217" y="300" width="212" height="64" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5" />
+        <text x="323" y="320" fill="white" font-size="11" font-weight="600" text-anchor="middle">ECS Fargate</text>
+        <text x="323" y="336" fill="#94a3b8" font-size="8" text-anchor="middle">Large File Download</text>
+        <text x="323" y="352" fill="#fbbf24" font-size="7" text-anchor="middle">&gt;100 MB → S3 multipart streaming</text>
+
+        <!-- AWS Lambda -->
+        <rect x="217" y="392" width="212" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5" />
+        <text x="323" y="413" fill="white" font-size="11" font-weight="600" text-anchor="middle">AWS Lambda</text>
+        <text x="323" y="429" fill="#94a3b8" font-size="8" text-anchor="middle">Metadata / Validation</text>
+        <text x="323" y="441" fill="#34d399" font-size="7" text-anchor="middle">(VPC-attached)</text>
+
+        <!-- VPC Endpoints column -->
+        <!-- S3 Gateway EP -->
+        <rect x="515" y="290" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="306" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · Amazon S3</text>
+        <text x="612" y="320" fill="#94a3b8" font-size="7" text-anchor="middle">Gateway Endpoint</text>
+
+        <!-- Athena Interface EP -->
+        <rect x="515" y="336" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="352" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · Athena</text>
+        <text x="612" y="366" fill="#94a3b8" font-size="7" text-anchor="middle">Interface (PrivateLink)</text>
+
+        <!-- Glue Interface EP -->
+        <rect x="515" y="382" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="398" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · Glue</text>
+        <text x="612" y="412" fill="#94a3b8" font-size="7" text-anchor="middle">Interface (PrivateLink)</text>
+
+        <!-- ECR Interface EP -->
+        <rect x="515" y="428" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="444" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · ECR</text>
+        <text x="612" y="458" fill="#94a3b8" font-size="7" text-anchor="middle">api + dkr (image pull)</text>
+
+        <!-- Logs Interface EP -->
+        <rect x="515" y="474" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="490" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · CloudWatch</text>
+        <text x="612" y="504" fill="#94a3b8" font-size="7" text-anchor="middle">Logs</text>
+
+        <!-- KMS/STS Interface EP -->
+        <rect x="515" y="520" width="195" height="40" rx="5" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1.3" />
+        <text x="612" y="536" fill="white" font-size="9" font-weight="600" text-anchor="middle">VPC Endpoint · KMS / STS</text>
+        <text x="612" y="550" fill="#94a3b8" font-size="7" text-anchor="middle">Interface (PrivateLink)</text>
+
+        <!-- Tableau Server -->
+        <rect x="845" y="298" width="190" height="64" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5" />
+        <text x="940" y="318" fill="white" font-size="11" font-weight="600" text-anchor="middle">Tableau Server</text>
+        <text x="940" y="334" fill="#94a3b8" font-size="8" text-anchor="middle">EC2 · Auto Scaling Group</text>
+        <text x="940" y="350" fill="#22d3ee" font-size="7" text-anchor="middle">Athena JDBC Driver</text>
+
+        <!-- Regional: EventBridge -->
+        <rect x="1150" y="157" width="210" height="46" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5" />
+        <text x="1255" y="177" fill="white" font-size="10" font-weight="600" text-anchor="middle">Amazon EventBridge</text>
+        <text x="1255" y="192" fill="#94a3b8" font-size="8" text-anchor="middle">Scheduler</text>
+
+        <!-- Regional: Step Functions -->
+        <rect x="1150" y="212" width="210" height="46" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5" />
+        <text x="1255" y="232" fill="white" font-size="10" font-weight="600" text-anchor="middle">AWS Step Functions</text>
+        <text x="1255" y="247" fill="#94a3b8" font-size="8" text-anchor="middle">Orchestration</text>
+
+        <!-- Regional: Amazon Athena -->
+        <rect x="1150" y="302" width="210" height="50" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5" />
+        <text x="1255" y="323" fill="white" font-size="11" font-weight="600" text-anchor="middle">Amazon Athena</text>
+        <text x="1255" y="339" fill="#94a3b8" font-size="8" text-anchor="middle">Serverless SQL Engine</text>
+
+        <!-- Regional: AWS Glue -->
+        <rect x="1150" y="366" width="210" height="50" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5" />
+        <text x="1255" y="387" fill="white" font-size="11" font-weight="600" text-anchor="middle">AWS Glue</text>
+        <text x="1255" y="403" fill="#94a3b8" font-size="8" text-anchor="middle">Data Catalog + Crawler</text>
+
+        <!-- Regional: S3 Data Lake -->
+        <rect x="1150" y="428" width="210" height="82" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5" />
+        <text x="1255" y="449" fill="white" font-size="11" font-weight="600" text-anchor="middle">Amazon S3 — Data Lake</text>
+        <text x="1255" y="466" fill="#94a3b8" font-size="8" text-anchor="middle">raw/ · curated/ (partitioned)</text>
+        <text x="1255" y="482" fill="#94a3b8" font-size="8" text-anchor="middle">by date</text>
+        <text x="1255" y="500" fill="#a78bfa" font-size="7" text-anchor="middle">SSE-KMS encrypted</text>
+
+        <!-- Regional: S3 Results -->
+        <rect x="1150" y="524" width="210" height="46" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5" />
+        <text x="1255" y="544" fill="white" font-size="10" font-weight="600" text-anchor="middle">Amazon S3 — Query Results</text>
+        <text x="1255" y="559" fill="#94a3b8" font-size="8" text-anchor="middle">Athena output location</text>
+
+        <!-- Regional: KMS -->
+        <rect x="1150" y="584" width="210" height="46" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5" />
+        <text x="1255" y="604" fill="white" font-size="11" font-weight="600" text-anchor="middle">AWS KMS</text>
+        <text x="1255" y="619" fill="#94a3b8" font-size="8" text-anchor="middle">Encryption keys (CMK)</text>
+
+        <!-- Regional: CloudTrail / Flow Logs -->
+        <rect x="1150" y="644" width="210" height="46" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5" />
+        <text x="1255" y="664" fill="white" font-size="10" font-weight="600" text-anchor="middle">CloudTrail · VPC Flow Logs</text>
+        <text x="1255" y="679" fill="#94a3b8" font-size="8" text-anchor="middle">Audit &amp; network monitoring</text>
+
+        <!-- ========================================= -->
+        <!-- CALLOUT NOTE                                -->
+        <!-- ========================================= -->
+        <rect x="197" y="600" width="513" height="96" rx="8" fill="rgba(15,23,42,0.7)" stroke="#334155" stroke-width="1" />
+        <text x="210" y="620" fill="#e2e8f0" font-size="9" font-weight="600">How connectivity stays private</text>
+        <text x="210" y="638" fill="#94a3b8" font-size="8">• EventBridge, Step Functions, Athena, Glue, S3 &amp; KMS are regional AWS</text>
+        <text x="210" y="651" fill="#94a3b8" font-size="8">&nbsp;&nbsp;services — not deployed inside the VPC.</text>
+        <text x="210" y="666" fill="#94a3b8" font-size="8">• VPC compute reaches them via Gateway (S3) &amp; Interface / PrivateLink</text>
+        <text x="210" y="679" fill="#94a3b8" font-size="8">&nbsp;&nbsp;endpoints — Athena, Glue, ECR, Logs, KMS/STS stay off the NAT/public path.</text>
+        <text x="210" y="693" fill="#94a3b8" font-size="8">• data.gov.sg is reached outbound-only through NAT Gateways (one per AZ).</text>
+
+        <!-- ========================================= -->
+        <!-- LEGEND                                      -->
+        <!-- ========================================= -->
+        <text x="200" y="752" fill="white" font-size="10" font-weight="600">Legend</text>
+
+        <rect x="200" y="762" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.6)" stroke="#94a3b8" stroke-width="1" />
+        <text x="222" y="770" fill="#94a3b8" font-size="8">External / Users</text>
+
+        <rect x="330" y="762" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.35)" stroke="#fbbf24" stroke-width="1" />
+        <text x="352" y="770" fill="#94a3b8" font-size="8">AWS Managed / Edge</text>
+
+        <rect x="490" y="762" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1" />
+        <text x="512" y="770" fill="#94a3b8" font-size="8">Compute / Orchestration</text>
+
+        <rect x="670" y="762" width="16" height="10" rx="2" fill="rgba(8, 47, 73, 0.5)" stroke="#38bdf8" stroke-width="1" />
+        <text x="692" y="770" fill="#94a3b8" font-size="8">VPC Endpoint</text>
+
+        <rect x="800" y="762" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1" />
+        <text x="822" y="770" fill="#94a3b8" font-size="8">Storage / Analytics</text>
+
+        <rect x="950" y="762" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1" />
+        <text x="972" y="770" fill="#94a3b8" font-size="8">Security</text>
+
+        <line x1="1060" y1="767" x2="1076" y2="767" stroke="#fb7185" stroke-width="1.3" stroke-dasharray="4,3" />
+        <text x="1082" y="770" fill="#94a3b8" font-size="8">Private / PrivateLink</text>
+
+        <line x1="1230" y1="767" x2="1246" y2="767" stroke="#34d399" stroke-width="1.3" stroke-dasharray="5,3" />
+        <text x="1252" y="770" fill="#94a3b8" font-size="8">Control flow</text>
+
+        <line x1="200" y1="787" x2="216" y2="787" stroke="#22d3ee" stroke-width="1.3" />
+        <text x="222" y="790" fill="#94a3b8" font-size="8">User / JDBC</text>
+
+        <line x1="330" y1="787" x2="346" y2="787" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#ah-purple)" />
+        <text x="352" y="790" fill="#94a3b8" font-size="8">Data flow</text>
+      </svg>
+    </div>
+
+    <!-- Footer -->
+    <p class="footer">
+      HDB Data Engineering Technical Test — Part 2: Architecture
+    </p>
+  </div>
+</body>
+</html>
